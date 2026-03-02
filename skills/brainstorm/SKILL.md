@@ -104,7 +104,7 @@ Work through requirements **one topic at a time**:
 2. **Scope** — What's in? What's explicitly out?
 3. **Constraints** — Performance, compatibility, timeline?
 4. **Success criteria** — How do we know it's done?
-5. **Visual testing** — Does this involve UI/web changes that should be visually tested? Ask explicitly: "Should we include a visual testing step for this?" Record the answer — it determines whether Phase 7.5 runs later.
+5. **Visual testing** — Don't ask about this. The user will tell you if they want visual testing. Only run Phase 7.5 if the user explicitly requests it.
 
 ### How to Ask
 
@@ -428,22 +428,13 @@ After all worker todos are complete, **if the plan involves UI or web changes**,
 
 ### When to Trigger
 
-- The plan involves UI components, layouts, pages, or web-facing changes
-- **Skip for:** backend-only work, CLI tools, config changes, pure library code
+**Only when the user explicitly asks for it.** Don't proactively offer or ask about visual testing — the user will tell you when they want it.
 
-### Manual Checkpoint
-
-Ask the user before proceeding:
-
-> "All implementation todos are complete. This involved UI changes — would you like to run a visual test before the code review?"
-
-**If the user says yes**, confirm prerequisites:
+If the user requests visual testing, confirm prerequisites:
 
 > "Two things I need before running the visual tester:
 > 1. Is your local dev server running? (e.g., `npm run dev`)
 > 2. Is the Playwriter Chrome extension connected? (Click the extension icon on your localhost tab)"
-
-**If the user says no**, skip straight to the reviewer.
 
 ### Running the Visual Tester
 
@@ -517,7 +508,7 @@ Then work through todos sequentially:
 Check:
 1. ✅ All worker todos are closed?
 2. ✅ **Every completed todo has a polished commit** (using the `commit` skill)?
-3. ✅ **Visual testing offered?** (if UI/web changes — user may skip, that's fine)
+3. ✅ **Visual testing run?** (only if the user requested it — don't ask)
 4. ✅ **Reviewer has run?** ← If no, run it now
 5. ✅ Reviewer findings triaged and addressed?
 
@@ -578,6 +569,30 @@ todo(action: "update", id: "TODO-xxxx", status: "closed")
 ---
 
 ## Tips for Good Brainstorming
+
+### Don't Rush Big Problems
+
+Not everything fits in one brainstorming session. When the scope is large — a full product, a multi-system feature, a complex architecture — **slow down and propose splitting the conversation**.
+
+Signs it's too big for one pass:
+- Multiple independent subsystems or domains
+- More than ~10 todos would come out of it
+- Tradeoffs that deserve dedicated discussion (e.g., data model, auth strategy, API design)
+- Something that would take more than a day or two to build
+
+**What to do:** Suggest using `/tree` to branch the session. `/tree` lets you jump to any point in the conversation and continue from there — creating a separate branch for each sub-topic. Each branch gets focused, deep discussion. Then you `/tree` back to the common point and synthesize everything into a unified plan.
+
+> "This is a big one — I think we'd get a better result if we break it into focused chunks rather than rushing through everything at once. We can `/tree` off into separate branches to go deep on each area, then come back and bring it all together into one plan."
+
+Propose concrete splits:
+> "We could split this into:
+> 1. **Data model & API design** — nail down the schema and endpoints
+> 2. **Auth & permissions** — discuss the access control approach
+> 3. **Frontend flows** — walk through the UI and user journeys
+> 
+> We'll `/tree` into each one, discuss tradeoffs properly, then `/tree` back here and I'll synthesize a unified plan from all the branches."
+
+This prevents shallow design on complex problems. A 20-minute skim over a huge feature leads to a weak plan and rework later. Three focused deep dives produce much better outcomes because each branch gets the attention it deserves.
 
 ### Read the Room
 - If they have a clear vision → validate rather than over-question
