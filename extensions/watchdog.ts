@@ -157,7 +157,7 @@ export default function (pi: ExtensionAPI) {
   // State
   let lastActivityTimestamp: number = Date.now();
   let consecutiveInterventions: number = 0;
-  let enabled: boolean = true;
+  let enabled: boolean = false;
   let checkIntervalMs: number = 5 * 60 * 1000; // 5 minutes
   let stuckThresholdMs: number = 5 * 60 * 1000; // same as check interval
   const maxInterventions: number = 3;
@@ -279,7 +279,7 @@ export default function (pi: ExtensionAPI) {
     lastActivityTimestamp = Date.now();
     consecutiveInterventions = 0;
     updateStatusBar();
-    startTimer(ctx);
+    if (enabled) startTimer(ctx);
   });
 
   pi.on("session_shutdown", async () => {
