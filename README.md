@@ -53,7 +53,7 @@ Specialized subagents for delegated workflows, powered by `pi-subagents`.
 | **scout** | Haiku | Fast codebase reconnaissance — gathers context without making changes |
 | **worker** | Sonnet 4.6 | Implements tasks from todos, commits with polished messages, closes todos |
 | **reviewer** | Codex 5.3 | Reviews code for quality and security using the shared review-rubric skill |
-| **investigator** | Haiku → Claude Code | Offloads tasks to Claude Code for web research, analysis, etc. |
+| **researcher** | Sonnet 4.6 → Claude Code | Deep research using Claude Code — web research, code analysis, technical exploration |
 | **visual-tester** | Sonnet 4.6 | Visual QA — navigates web UIs via Playwriter MCP, spots issues, tests interactions |
 
 ### Skills
