@@ -5,6 +5,16 @@
  * @anthropic-ai/claude-agent-sdk. Claude Code has web search, file access,
  * bash, code editing, and all built-in tools. Results stream back live.
  *
+ * ## Streaming Overlay
+ *
+ * In interactive mode (ctx.hasUI), a non-capturing overlay panel streams
+ * Claude Code's output in real-time on the right side of the terminal.
+ * The overlay is passive — it doesn't steal keyboard focus, so the agent
+ * and user can continue working. It auto-closes when the tool finishes.
+ *
+ * In headless mode (subagents), the overlay is skipped entirely.
+ * The tool behavior is identical regardless of UI availability.
+ *
  * ## Session Persistence
  *
  * Every invocation creates a persistent Claude Code session stored at:
@@ -26,17 +36,21 @@
  *
  * Multiple claude tool calls can run in parallel. Each invocation has its
  * own isolated state (text buffer, tool tracking, abort controller).
- * No shared mutable state between calls.
+ * No shared mutable state between calls. Only one overlay is shown at a
+ * time — concurrent calls skip the overlay for the second+ invocations.
  */
 
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI, Theme } from "@mariozechner/pi-coding-agent";
 import { truncateHead, DEFAULT_MAX_BYTES, DEFAULT_MAX_LINES, formatSize } from "@mariozechner/pi-coding-agent";
 import { Type } from "@sinclair/typebox";
-import { Text } from "@mariozechner/pi-tui";
+import { Text, truncateToWidth, visibleWidth, wrapTextWithAnsi } from "@mariozechner/pi-tui";
+import type { TUI, Component } from "@mariozechner/pi-tui";
 import { query } from "@anthropic-ai/claude-agent-sdk";
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { join, basename } from "node:path";
 import { homedir } from "node:os";
+
+// ── Helpers ──
 
 function formatDuration(ms: number): string {
 	const secs = Math.floor(ms / 1000);
@@ -91,6 +105,131 @@ function indexSession(cwd: string, record: {
 		writeFileSync(file, JSON.stringify(sessions, null, 2) + "\n");
 	} catch {}
 }
+
+// ── Overlay State & Component ──
+
+/** Shared mutable state between streaming loop and overlay component */
+interface OverlayState {
+	text: string;
+	phase: "thinking" | "tools" | "responding";
+	toolUses: string[];
+	cost: number;
+	startTime: number;
+	sessionId: string;
+	sessionModel: string;
+	responseTokens: number;
+	prompt: string;
+}
+
+/** Maximum lines of streaming output to show in the overlay */
+const OVERLAY_MAX_LINES = 40;
+
+/**
+ * Non-capturing overlay panel that streams Claude Code output.
+ * State is mutated externally by the streaming loop; the component
+ * reads it on each render() call. No caching since content changes
+ * on every update.
+ */
+class ClaudeStreamPanel implements Component {
+	constructor(
+		private state: OverlayState,
+		private theme: Theme,
+	) {}
+
+	render(width: number): string[] {
+		const th = this.theme;
+		const innerW = width - 4; // 2 for border chars, 2 for padding
+		if (innerW < 10) return [];
+
+		const lines: string[] = [];
+
+		const pad = (content: string) => {
+			const vis = visibleWidth(content);
+			const padding = Math.max(0, innerW - vis);
+			return th.fg("border", "│") + " " + content + " ".repeat(padding) + " " + th.fg("border", "│");
+		};
+
+		// ── Top border with title ──
+		const elapsed = formatDuration(Date.now() - this.state.startTime);
+		const title = ` Claude Code ${elapsed} `;
+		const titleStyled = th.fg("accent", title);
+		const borderRemaining = Math.max(0, innerW - title.length);
+		const leftBorder = Math.floor(borderRemaining / 2);
+		const rightBorder = borderRemaining - leftBorder;
+		lines.push(
+			th.fg("border", "╭" + "─".repeat(leftBorder)) +
+			titleStyled +
+			th.fg("border", "─".repeat(rightBorder) + "╮")
+		);
+
+		// ── Status line ──
+		let status = "";
+		const phase = this.state.phase;
+		if (phase === "thinking") {
+			status += th.fg("warning", "● ") + th.fg("muted", "thinking…");
+		} else if (phase === "tools") {
+			status += th.fg("warning", "● ") + th.fg("muted", "working…");
+		} else {
+			status += th.fg("success", "● ") + th.fg("muted", "responding");
+			if (this.state.responseTokens > 0) {
+				status += th.fg("dim", ` ~${this.state.responseTokens} tokens`);
+			}
+		}
+		if (this.state.cost > 0) {
+			status += th.fg("dim", ` · $${this.state.cost.toFixed(4)}`);
+		}
+		lines.push(pad(status));
+
+		// ── Tool chain ──
+		if (this.state.toolUses.length > 0) {
+			const chain = compressToolChain(this.state.toolUses);
+			const wrapped = wrapTextWithAnsi(th.fg("dim", "tools: " + chain), innerW);
+			for (const wl of wrapped.split("\n")) {
+				lines.push(pad(wl));
+			}
+		}
+
+		// ── Separator ──
+		lines.push(th.fg("border", "├" + "─".repeat(innerW + 2) + "┤"));
+
+		// ── Streaming content (last N lines) ──
+		const text = this.state.text;
+		if (!text) {
+			lines.push(pad(th.fg("dim", "Waiting for output…")));
+		} else {
+			// Wrap and take last N lines for auto-scrolling effect
+			const rawLines = text.split("\n");
+			const wrappedLines: string[] = [];
+			for (const rl of rawLines) {
+				if (rl === "") {
+					wrappedLines.push("");
+				} else {
+					const wrapped = wrapTextWithAnsi(rl, innerW);
+					wrappedLines.push(...wrapped.split("\n"));
+				}
+			}
+
+			const display = wrappedLines.slice(-OVERLAY_MAX_LINES);
+			for (const dl of display) {
+				lines.push(pad(truncateToWidth(dl, innerW)));
+			}
+		}
+
+		// ── Bottom border ──
+		lines.push(th.fg("border", "╰" + "─".repeat(innerW + 2) + "╯"));
+
+		return lines;
+	}
+
+	invalidate(): void {
+		// No cache to clear — we always render fresh from state
+	}
+}
+
+// ── Concurrency guard: only one overlay at a time ──
+let overlayActive = false;
+
+// ── Extension ──
 
 export default function (pi: ExtensionAPI) {
 	pi.registerTool({
@@ -171,11 +310,62 @@ export default function (pi: ExtensionAPI) {
 			let sessionId = "";
 			let sessionModel = "";
 			let toolUses: string[] = [];
-			// Track phase: "thinking" → "tools" → "responding"
-			// Only show token count during "responding" (final answer streaming)
 			let phase: "thinking" | "tools" | "responding" = "thinking";
-			// Count only tokens from the final response segment
 			let responseText = "";
+
+			// ── Overlay setup (interactive mode only, one at a time) ──
+			const showOverlay = ctx.hasUI && !overlayActive;
+			let overlayTui: TUI | null = null;
+			let overlayCloseFn: (() => void) | null = null;
+			let overlayPromise: Promise<void> | null = null;
+
+			const overlayState: OverlayState = {
+				text: "",
+				phase: "thinking",
+				toolUses: [],
+				cost: 0,
+				startTime,
+				sessionId: "",
+				sessionModel: "",
+				responseTokens: 0,
+				prompt: prompt.length > 80 ? prompt.slice(0, 80) + "…" : prompt,
+			};
+
+			if (showOverlay) {
+				overlayActive = true;
+				overlayPromise = ctx.ui.custom<void>(
+					(tui, theme, _kb, done) => {
+						overlayTui = tui;
+						overlayCloseFn = () => done();
+						return new ClaudeStreamPanel(overlayState, theme);
+					},
+					{
+						overlay: true,
+						overlayOptions: {
+							nonCapturing: true,
+							anchor: "right-center",
+							width: "50%",
+							minWidth: 40,
+							maxHeight: "90%",
+							margin: { right: 1, top: 1, bottom: 1 },
+							visible: (termWidth) => termWidth >= 100,
+						},
+					},
+				);
+			}
+
+			/** Sync overlay state from local vars and trigger re-render */
+			function updateOverlay() {
+				if (!showOverlay) return;
+				overlayState.text = fullText;
+				overlayState.phase = phase;
+				overlayState.toolUses = [...toolUses];
+				overlayState.cost = cost;
+				overlayState.sessionId = sessionId;
+				overlayState.sessionModel = sessionModel;
+				overlayState.responseTokens = countTokensApprox(responseText);
+				overlayTui?.requestRender();
+			}
 
 			function emitUpdate() {
 				onUpdate?.({
@@ -191,6 +381,7 @@ export default function (pi: ExtensionAPI) {
 						sessionModel,
 					},
 				});
+				updateOverlay();
 			}
 
 			emitUpdate();
@@ -201,7 +392,6 @@ export default function (pi: ExtensionAPI) {
 				for await (const message of conversation) {
 					if (signal?.aborted) break;
 
-					// Capture session ID from init message
 					if (message.type === "system" && (message as any).subtype === "init") {
 						sessionId = (message as any).session_id ?? "";
 						sessionModel = (message as any).model ?? "";
@@ -209,7 +399,6 @@ export default function (pi: ExtensionAPI) {
 						continue;
 					}
 
-					// Token-by-token streaming
 					if (message.type === "stream_event") {
 						const delta = (message as any).event?.delta;
 						if (delta?.type === "text_delta" && delta.text) {
@@ -223,13 +412,11 @@ export default function (pi: ExtensionAPI) {
 						continue;
 					}
 
-					// Track tool usage — resets response tracking for next segment
 					if (message.type === "assistant") {
 						for (const block of (message as any).message?.content ?? []) {
 							if (block.type === "tool_use") {
 								toolUses.push(block.name);
 								phase = "tools";
-								// Reset response token counter — next text segment is a new response
 								responseText = "";
 								emitUpdate();
 							}
@@ -246,6 +433,13 @@ export default function (pi: ExtensionAPI) {
 					}
 				}
 			} catch (err: any) {
+				// Close overlay before returning
+				if (showOverlay) {
+					overlayCloseFn?.();
+					if (overlayPromise) await overlayPromise;
+					overlayActive = false;
+				}
+
 				if (err.name === "AbortError" || signal?.aborted) {
 					return {
 						content: [{ type: "text", text: fullText || "(cancelled)" }],
@@ -257,6 +451,13 @@ export default function (pi: ExtensionAPI) {
 					details: { error: err.message },
 					isError: true,
 				};
+			}
+
+			// ── Close overlay ──
+			if (showOverlay) {
+				overlayCloseFn?.();
+				if (overlayPromise) await overlayPromise;
+				overlayActive = false;
 			}
 
 			const elapsed = Date.now() - startTime;
@@ -283,7 +484,7 @@ export default function (pi: ExtensionAPI) {
 
 			const totalTokens = countTokensApprox(fullText);
 
-			// Write to file instead of returning inline — saves context tokens
+			// Write to file instead of returning inline
 			if (outputFile) {
 				try {
 					const outPath = outputFile.startsWith("/")
@@ -369,12 +570,10 @@ export default function (pi: ExtensionAPI) {
 				status += theme.fg("dim", ` ${elapsed}`);
 				if (cost > 0) status += theme.fg("dim", ` $${cost.toFixed(4)}`);
 
-				// Show token count only when the final response is streaming
 				if (phase === "responding" && responseTokens > 0) {
 					status += theme.fg("dim", ` ~${responseTokens} tokens`);
 				}
 
-				// Phase-specific status
 				if (phase === "thinking") {
 					status += theme.fg("dim", " thinking…");
 				} else if (phase === "tools") {
@@ -423,7 +622,6 @@ export default function (pi: ExtensionAPI) {
 			}
 
 			if (details?.outputFile) {
-				// File mode: no inline content, just the summary
 				return new Text(header, 0, 0);
 			}
 
