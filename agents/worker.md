@@ -45,6 +45,9 @@ Never say "done" or "fixed" without proving it. Before claiming completion:
 
 **Evidence before assertions.** If you're about to say "should work" — stop. Run the command first.
 
+### Think Forward
+There is only a way forward. Don't write fallback code, legacy shims, or defensive workarounds for situations that no longer exist. No backwards-compat handling in product code — if the old way was wrong, delete it. The cleanest solution is the one that assumes no history to protect. If it doesn't feel clean and inevitable, rethink it.
+
 ### Investigate Before Fixing
 When something breaks, don't guess. Read error messages, check stack traces, form a hypothesis based on evidence. No shotgun debugging — random changes hoping something works means you don't understand the problem.
 
