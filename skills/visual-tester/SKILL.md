@@ -1,11 +1,11 @@
 ---
 name: visual-tester
-description: "Visually test web UIs using Playwriter MCP — spot layout issues, interaction bugs, responsive breakage, and produce a structured report"
+description: "Visually test web UIs using Chrome CDP — spot layout issues, interaction bugs, responsive breakage, and produce a structured report"
 ---
 
 # Visual Tester
 
-Ad-hoc visual QA for web UIs. You use Playwriter (via MCP) to control a browser, take labeled screenshots, interact with elements, and report what looks wrong.
+Ad-hoc visual QA for web UIs. You use Chrome CDP (`scripts/cdp.mjs`) to control the browser, take screenshots, inspect accessibility trees, interact with elements, and report what looks wrong.
 
 This is not a formal test suite — it's "let me look at this and check if it's right."
 
@@ -13,56 +13,53 @@ This is not a formal test suite — it's "let me look at this and check if it's 
 
 ## Setup
 
-You interact with the browser via the Playwriter MCP `execute` tool. Each call runs a Playwright code snippet with `page`, `context`, `state`, and utility functions in scope.
+You interact with the browser via the `scripts/cdp.mjs` CLI. Read the **chrome-cdp** skill for the full command reference.
 
-### 1. Create a page and navigate
+### Prerequisites
 
-**Always create your own page** — never use the default `page` variable:
+- Chrome with remote debugging enabled: `chrome://inspect/#remote-debugging` → toggle the switch
+- The target page open in a Chrome tab
 
-```js
-state.myPage = await context.newPage(); await state.myPage.goto("http://localhost:3000")
+### 1. Find your target tab
+
+```bash
+scripts/cdp.mjs list
 ```
 
-Store it in `state.myPage` so it persists across calls.
+Pick the target from the list. Use the targetId prefix (e.g. `6BE827FA`) for all subsequent commands.
 
-### 2. Verify connection with a labeled screenshot
+### 2. Take a screenshot to verify connection
 
-```js
-await screenshotWithAccessibilityLabels({ page: state.myPage })
+```bash
+scripts/cdp.mjs shot <target> /tmp/screenshot.png
 ```
 
-If you get an image back with labeled elements, you're connected. If you get a connection error, use the Playwriter `reset` tool and retry.
+If you get an image back, you're connected.
+
+### 3. Get the page structure
+
+```bash
+scripts/cdp.mjs snap <target>
+```
 
 ---
 
 ## Taking Screenshots
 
-### Labeled screenshots (primary tool)
+### Standard screenshot
 
-Use `screenshotWithAccessibilityLabels` for most screenshots. It overlays Vimium-style labels on interactive elements and returns both an image and an accessibility snapshot:
-
-```js
-await screenshotWithAccessibilityLabels({ page: state.myPage })
+```bash
+scripts/cdp.mjs shot <target> /tmp/screenshot.png
 ```
 
-This is your main way to "see" the page. The labels let you reference specific elements precisely. The image and accessibility snapshot are automatically included in the response.
+Captures the viewport. Output includes DPR for coordinate conversion.
 
-### Plain screenshots
-
-For clean screenshots without labels (e.g., when labels clutter the view):
-
-```js
-await state.myPage.screenshot({ path: '/tmp/screenshot.png', scale: 'css' })
-```
-
-**Always use `scale: 'css'`** for consistent sizing on high-DPI displays.
-
-### Accessibility snapshot (text-only)
+### Accessibility snapshot (text-only structure)
 
 For text-heavy pages where you need to read content without a screenshot:
 
-```js
-await accessibilitySnapshot({ page: state.myPage })
+```bash
+scripts/cdp.mjs snap <target>
 ```
 
 ---
@@ -110,7 +107,7 @@ await accessibilitySnapshot({ page: state.myPage })
 
 ## Responsive Testing
 
-Test at these breakpoints by changing the viewport:
+Test at these breakpoints by changing the viewport via eval:
 
 | Name | Width | Height |
 |------|-------|--------|
@@ -119,11 +116,18 @@ Test at these breakpoints by changing the viewport:
 | Desktop | 1280 | 800 |
 | Wide | 1920 | 1080 |
 
-```js
-await state.myPage.setViewportSize({ width: 375, height: 812 }); await screenshotWithAccessibilityLabels({ page: state.myPage })
+```bash
+scripts/cdp.mjs evalraw <target> Emulation.setDeviceMetricsOverride '{"width":375,"height":812,"deviceScaleFactor":2,"mobile":true}'
+scripts/cdp.mjs shot <target> /tmp/mobile.png
 ```
 
-Take a labeled screenshot at each size. Look for:
+Reset to default after testing:
+
+```bash
+scripts/cdp.mjs evalraw <target> Emulation.clearDeviceMetricsOverride
+```
+
+Take a screenshot at each size. Look for:
 - Navigation collapsing properly (hamburger menu on mobile)
 - Content not overflowing horizontally
 - Touch targets large enough on mobile (min 44x44px)
@@ -137,59 +141,70 @@ You don't always need all four breakpoints. Use judgment — if it's a simple co
 
 ## Interaction Testing
 
-### Buttons & Links
-Click interactive elements and verify they respond:
+### Clicking elements
 
-```js
-await state.myPage.click('[data-testid="submit-btn"]'); await screenshotWithAccessibilityLabels({ page: state.myPage })
+```bash
+scripts/cdp.mjs click <target> 'button[type="submit"]'
+scripts/cdp.mjs shot <target> /tmp/after-click.png
+```
+
+Or click by coordinates (CSS pixels):
+
+```bash
+scripts/cdp.mjs clickxy <target> 200 350
 ```
 
 **Always screenshot after actions** to verify the result.
 
 ### Forms
-Fill inputs and verify they accept values:
 
-```js
-await state.myPage.fill('input[name="email"]', 'test@example.com'); await state.myPage.fill('input[name="password"]', 'password123'); await state.myPage.click('button[type="submit"]'); await screenshotWithAccessibilityLabels({ page: state.myPage })
+```bash
+scripts/cdp.mjs click <target> 'input[name="email"]'
+scripts/cdp.mjs type <target> 'test@example.com'
+scripts/cdp.mjs click <target> 'input[name="password"]'
+scripts/cdp.mjs type <target> 'password123'
+scripts/cdp.mjs click <target> 'button[type="submit"]'
+scripts/cdp.mjs shot <target> /tmp/form-submitted.png
 ```
 
 Check: validation messages styled correctly? Success/error states clear?
 
 ### Hover & Focus States
-```js
-await state.myPage.hover('button.primary'); await screenshotWithAccessibilityLabels({ page: state.myPage })
-```
 
-```js
-await state.myPage.focus('input[name="email"]'); await screenshotWithAccessibilityLabels({ page: state.myPage })
+Use `eval` to trigger hover/focus for inspection:
+
+```bash
+scripts/cdp.mjs eval <target> "document.querySelector('button.primary').dispatchEvent(new MouseEvent('mouseover', {bubbles: true}))"
+scripts/cdp.mjs shot <target> /tmp/hover.png
 ```
 
 ### Navigation
+
 Click through different routes/pages. Verify:
 - Page transitions work
 - Active nav item is highlighted
 - Back button works
 - URL updates correctly
 
-### Animations & Transitions
-If something should animate, use video recording:
-
-```js
-await startRecording({ page: state.myPage, outputPath: '/tmp/animation.mp4' }); await state.myPage.click('.accordion-trigger'); await new Promise(r => setTimeout(r, 1000)); const result = await stopRecording({ page: state.myPage }); console.log('Recorded:', result.path, result.duration + 'ms')
+```bash
+scripts/cdp.mjs nav <target> http://localhost:3000/other-page
+scripts/cdp.mjs shot <target> /tmp/other-page.png
 ```
 
 ---
 
 ## Dark Mode / Light Mode
 
-Toggle color scheme emulation:
+Toggle color scheme emulation via CDP:
 
-```js
-await state.myPage.emulateMedia({ colorScheme: 'dark' }); await screenshotWithAccessibilityLabels({ page: state.myPage })
+```bash
+scripts/cdp.mjs evalraw <target> Emulation.setEmulatedMedia '{"features":[{"name":"prefers-color-scheme","value":"dark"}]}'
+scripts/cdp.mjs shot <target> /tmp/dark-mode.png
 ```
 
-```js
-await state.myPage.emulateMedia({ colorScheme: 'light' }); await screenshotWithAccessibilityLabels({ page: state.myPage })
+```bash
+scripts/cdp.mjs evalraw <target> Emulation.setEmulatedMedia '{"features":[{"name":"prefers-color-scheme","value":"light"}]}'
+scripts/cdp.mjs shot <target> /tmp/light-mode.png
 ```
 
 Check:
@@ -202,13 +217,17 @@ Check:
 
 ## CSS Inspection
 
-When you spot something off, inspect the styles:
+When you spot something off, inspect the styles via eval:
 
-```js
-const cdp = await getCDPSession({ page: state.myPage }); const styles = await getStylesForLocator({ locator: state.myPage.locator('.suspect-element'), cdp }); console.log(formatStylesAsText(styles))
+```bash
+scripts/cdp.mjs eval <target> "JSON.stringify(window.getComputedStyle(document.querySelector('.suspect-element')).cssText)"
 ```
 
-This helps confirm whether an issue is a CSS problem vs. content problem. Fetch the full styles API docs with the Playwriter `get_styles_api` resource if needed.
+Or get specific properties:
+
+```bash
+scripts/cdp.mjs eval <target> "window.getComputedStyle(document.querySelector('.suspect-element')).getPropertyValue('margin-top')"
+```
 
 ---
 
@@ -270,15 +289,13 @@ Brief overall impression. Is this ready to ship? Major concerns?
 
 **Before writing the report, restore the page to its original state.** Don't leave the browser in a modified viewport, dark mode, or on a different URL than where you started.
 
-```js
-await state.myPage.setViewportSize({ width: 1280, height: 800 }); await state.myPage.emulateMedia({ colorScheme: null }); await state.myPage.goto(state.originalUrl)
+```bash
+scripts/cdp.mjs evalraw <target> Emulation.clearDeviceMetricsOverride
+scripts/cdp.mjs evalraw <target> Emulation.setEmulatedMedia '{"features":[]}'
+scripts/cdp.mjs nav <target> <original-url>
 ```
 
-Store the original URL at the start of testing:
-
-```js
-state.originalUrl = state.myPage.url()
-```
+Note the original URL at the start of testing.
 
 ---
 
@@ -287,9 +304,9 @@ state.originalUrl = state.myPage.url()
 - **Use common sense.** Not every page needs all four breakpoints and dark mode. Test what matters.
 - **Screenshot liberally.** It's cheap. Take before/after shots for interactions.
 - **Describe what you see.** When reporting, be specific: "the submit button overlaps the footer by 12px on mobile" not "layout is broken."
-- **Reference labels.** Use the Vimium-style labels from `screenshotWithAccessibilityLabels` to identify elements precisely.
+- **Use accessibility snapshots** to understand page structure and identify elements precisely.
 - **Test the happy path first.** Make sure the basic flow works before testing edge cases.
 - **Check the console.** Look for JS errors that might explain visual issues:
-  ```js
-  state.myPage.on('console', msg => console.log(msg.type(), msg.text()))
+  ```bash
+  scripts/cdp.mjs eval <target> "JSON.stringify(window.__consoleErrors || 'no errors captured')"
   ```

@@ -51,7 +51,7 @@ Specialized subagents for delegated workflows, powered by `pi-subagents`.
 | **worker** | Sonnet 4.6 | Implements tasks from todos, commits with polished messages, closes todos |
 | **reviewer** | Codex 5.3 | Reviews code for quality and security using the shared review-rubric skill |
 | **researcher** | Sonnet 4.6 → Claude Code | Deep research using Claude Code — web research, code analysis, technical exploration |
-| **visual-tester** | Sonnet 4.6 | Visual QA — navigates web UIs via Playwriter MCP, spots issues, tests interactions |
+| **visual-tester** | Sonnet 4.6 | Visual QA — navigates web UIs via Chrome CDP, spots issues, tests interactions |
 
 ### Skills
 
@@ -71,7 +71,7 @@ Loaded on-demand when the context matches.
 | **tmux** | Driving interactive CLIs via tmux |
 | **presentation-creator** | Creating data-driven presentation slides with React, Vite, and Recharts |
 | **glimpse** | Showing native macOS UI — dialogs, forms, charts, floating widgets |
-| **visual-tester** | Visual testing web UIs with Playwriter MCP |
+| **visual-tester** | Visual testing web UIs with Chrome CDP |
 
 ### Extensions
 
@@ -103,11 +103,6 @@ Installed via `pi install` and managed in `settings.json`.
 | [pi-parallel](https://github.com/HazAT/pi-parallel) | Parallel web search, extract, research, and enrich tools |
 | [glimpse](https://github.com/HazAT/glimpse) | Native macOS UI from scripts — dialogs, forms, visualizations, floating widgets |
 | [pi-cmux](https://github.com/sasha-computer/pi-cmux) | cmux integration — context-aware notifications, sidebar status, browser/workspace tools |
-
-### MCP Servers
-
-[`mcp.json`](mcp.json) configures MCP servers:
-- **playwriter** — Browser automation for visual testing
 
 ---
 
