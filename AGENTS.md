@@ -198,7 +198,7 @@ ls ~/.pi/history/$(basename "$PWD")/research/
 |-------|---------|-------|
 | `scout` | Fast codebase reconnaissance | Haiku (fast, cheap) |
 | `worker` | Implements tasks from todos, makes polished commits (always using the `commit` skill), and closes the todo | Sonnet 4.6 |
-| `reviewer` | Reviews code for quality/security | Codex 5.3 |
+| `reviewer` | Reviews code for quality/security | Codex 5.4 |
 | `researcher` | Deep research using parallel.ai tools (web search, extraction, synthesis) + Claude Code for code analysis | Sonnet 4.6 |
 
 **Planning happens in the main session** (interactive, with user feedback) — not delegated to subagents.
