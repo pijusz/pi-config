@@ -21,7 +21,8 @@
     "git:github.com/HazAT/glimpse",
     "git:github.com/HazAT/pi-subagents",
     "git:git@github.com:sasha-computer/pi-cmux.git",
-    "npm:pi-design-deck"
+    "npm:pi-design-deck",
+    "npm:glimpseui"
   ],
   "hideThinkingBlock": false,
   "extensions": [
