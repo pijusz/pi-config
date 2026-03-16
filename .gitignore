@@ -1,5 +1,7 @@
 # Sensitive - don't sync
 auth.json
+mcp.json
+mcp-oauth/
 
 # Local state - don't sync
 .pi/

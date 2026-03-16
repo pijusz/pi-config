@@ -1,0 +1,47 @@
+{
+  "mcpServers": {
+
+    "figma": {
+      "url": "https://mcp.figma.com/mcp",
+      "auth": "bearer",
+      "bearerToken": "<token from Claude Code keychain>"
+    },
+
+    "linear-server": {
+      "url": "https://mcp.linear.app/mcp",
+      "auth": "bearer",
+      "bearerToken": "<token from Claude Code keychain>"
+    },
+
+    "polar": {
+      "url": "https://mcp.polar.sh/mcp/polar-mcp",
+      "auth": "bearer",
+      "bearerToken": "<token from Claude Code keychain — expires in 1hr>"
+    },
+
+    "polar-sandbox": {
+      "url": "https://mcp.polar.sh/mcp/polar-sandbox",
+      "auth": "bearer",
+      "bearerToken": "<token from Claude Code keychain — expires in 1hr>"
+    },
+
+    "Sanity": {
+      "url": "https://mcp.sanity.io",
+      "auth": "oauth",
+      "_comment": "Requires OAuth — run /mcp-auth Sanity after setup"
+    },
+
+    "sanity-images": {
+      "command": "npx",
+      "args": ["-y", "mcp-sanity-images@latest"],
+      "env": {
+        "SANITY_PROJECT_ID": "<your-project-id>"
+      }
+    },
+
+    "trigger": {
+      "command": "npx",
+      "args": ["trigger.dev@latest", "mcp"]
+    }
+  }
+}
