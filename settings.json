@@ -1,8 +1,8 @@
 {
-  "lastChangelogVersion": "0.58.0",
+  "lastChangelogVersion": "0.58.3",
   "defaultProvider": "anthropic",
   "defaultModel": "claude-opus-4-6",
-  "defaultThinkingLevel": "medium",
+  "defaultThinkingLevel": "high",
   "packages": [
     "git:github.com/nicobailon/pi-mcp-adapter",
     {
@@ -19,13 +19,18 @@
     },
     "git:github.com/pasky/chrome-cdp-skill",
     "git:github.com/HazAT/glimpse",
-    "git:github.com/nicobailon/pi-subagents"
+    "git:github.com/HazAT/pi-subagents",
+    "git:git@github.com:sasha-computer/pi-cmux.git",
+    "npm:pi-design-deck"
   ],
   "hideThinkingBlock": false,
   "extensions": [
     "+extensions/cmux/index.ts",
     "+extensions/ghostty.ts",
-    "+extensions/claude-tool/index.ts"
+    "+extensions/claude-tool/index.ts",
+    "+extensions/todos.ts",
+    "+extensions/notify.ts",
+    "+extensions/whimsical.ts"
   ],
   "skills": [
     "-skills/tmux/SKILL.md"
